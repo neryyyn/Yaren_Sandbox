@@ -332,6 +332,8 @@ GameObject:
   m_Component:
   - component: {fileID: 299163938}
   - component: {fileID: 299163937}
+  - component: {fileID: 299163939}
+  - component: {fileID: 299163940}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -381,6 +383,47 @@ Transform:
   - {fileID: 596171290}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &299163939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 299163936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8f80159f21a1dc439d7c2a996579262, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerInputReader
+  current:
+    Move: {x: 0, y: 0}
+    Look: {x: 0, y: 0}
+    Run: 0
+    Slow: 0
+    JumpPressed: 0
+    GrabPressed: 0
+    Lift: 0
+--- !u!114 &299163940
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 299163936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cd9ab4c3c22ee144a1c9553fbdb6b30, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerMotor
+  walkSpeed: 20
+  carrySpeed: 10
+  runSpeed: 30
+  slowSpeed: 8
+  turnSpeed: 720
+  jumpHeight: 1.5
+  gravity: -25
+  coyoteTime: 0.1
+  cameraTransform: {fileID: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -393,6 +436,7 @@ GameObject:
   - component: {fileID: 330585545}
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
+  - component: {fileID: 330585548}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -518,6 +562,24 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &330585548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 330585543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae9882cc06e1e0b439e7cdf599f2fbc8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThirdPersonCamera
+  target: {fileID: 299163938}
+  distance: 6
+  height: 1.5
+  sensitivity: 0.15
+  minPitch: -30
+  maxPitch: 70
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
