@@ -4,9 +4,13 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerInputReader))]
 public class PlayerMotor : MonoBehaviour
 {
+    public enum RotationMode { FaceCamera, FaceMovement }
+
+    [Header("Dönüþ")]
+    [SerializeField] private RotationMode rotationMode = RotationMode.FaceCamera;
     [Header("Hýzlar (birim/sn)")]
     [SerializeField] private float walkSpeed = 20f;
-    [SerializeField] private float carrySpeed = 10f;
+    [SerializeField, Range(0.1f, 1f)] private float carrySpeedMultiplier = 0.5f; // tepsiyle hýz çarpaný
     [SerializeField] private float runSpeed = 30f;
     [SerializeField] private float slowSpeed = 8f;   // GDD'de yok, ekiple netleþecek
     [SerializeField] private float turnSpeed = 720f; // derece/sn
@@ -21,11 +25,15 @@ public class PlayerMotor : MonoBehaviour
 
     // Tepsiyi tutunca Hands script'i bunu true yapacak
     public bool IsHolding { get; set; }
+
+    // Tepsi sistemi dönüþü kendisi yönetmek isterse true yapar
+    public bool LockRotation { get; set; }
     public bool IsGrounded => controller.isGrounded;
     public float CurrentSpeed { get; private set; }
 
-    // Tepsi tutarken Space'e basýlýnca Ýdil'in tepsi sistemi bunu dinleyecek
-    public event System.Action JumpRequested;
+    
+    // Karakter zýpladý (Ýdil'in tepsi sistemi senkron zýplamayý kontrol etmek için dinler)
+    public event System.Action Jumped;
 
     private CharacterController controller;
     private PlayerInputReader input;
@@ -57,10 +65,12 @@ public class PlayerMotor : MonoBehaviour
         float speed = PickSpeed(data);
         CurrentSpeed = direction.magnitude * speed;
 
-        // 3) Gidilen yöne dön
-        if (direction.sqrMagnitude > 0.001f)
+        // 3) Dönüþ: tepsi tutarken dönme, elin boþken seçilen moda göre dön
+        bool isMoving = direction.sqrMagnitude > 0.001f;
+        if (!IsHolding && !LockRotation && isMoving)
         {
-            Quaternion targetRot = Quaternion.LookRotation(direction);
+            Vector3 lookDirection = rotationMode == RotationMode.FaceCamera ? forward : direction;
+            Quaternion targetRot = Quaternion.LookRotation(lookDirection);
             transform.rotation = Quaternion.RotateTowards(
                 transform.rotation, targetRot, turnSpeed * Time.deltaTime);
         }
@@ -72,11 +82,8 @@ public class PlayerMotor : MonoBehaviour
             if (verticalVelocity < 0f) verticalVelocity = -2f; // yere yapýþýk kalsýn
         }
 
-        if (data.JumpPressed)
-        {
-            if (IsHolding) JumpRequested?.Invoke(); // tepsideyken kararý tepsi sistemi verir
-            else TryJump();
-        }
+        if (data.JumpPressed && TryJump())
+            Jumped?.Invoke();
 
         verticalVelocity += gravity * Time.deltaTime;
 
@@ -87,10 +94,12 @@ public class PlayerMotor : MonoBehaviour
 
     private float PickSpeed(PlayerInputData data)
     {
-        if (IsHolding) return carrySpeed;
-        if (data.Run) return runSpeed;
-        if (data.Slow) return slowSpeed;
-        return walkSpeed;
+        float speed = walkSpeed;
+        if (data.Run) speed = runSpeed;
+        else if (data.Slow) speed = slowSpeed;
+
+        if (IsHolding) speed *= carrySpeedMultiplier; // tepsiyle her hýz yavaþlar
+        return speed;
     }
 
     // Ýdil senkron zýplamada bunu çaðýrabilir
