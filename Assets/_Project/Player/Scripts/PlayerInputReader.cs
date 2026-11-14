@@ -12,6 +12,7 @@ public struct PlayerInputData
     public bool JumpPressed;  // Space bu karede basýldý mý
     public bool GrabPressed;  // E bu karede basýldý mý
     public float Lift;        // +1 sol týk (yükselt), -1 sað týk (alçalt), 0 hiçbiri
+    public float CameraYaw;   // kameranýn yatay açýsý (derece). Host yönü buradan hesaplar
 }
 
 [DefaultExecutionOrder(-100)] // diðer script'lerden önce çalýþsýn
@@ -19,6 +20,10 @@ public class PlayerInputReader : MonoBehaviour
 {
     [SerializeField] private PlayerInputData current; // Inspector'da canlý izlemek için
     public PlayerInputData Current => current;
+
+    [SerializeField] private Transform cameraTransform; // yerel oyuncunun kamerasý
+
+    public void SetCamera(Transform cam) => cameraTransform = cam;
 
     private InputAction move, look, run, slow, jump, grab, raise, lower;
 
@@ -54,5 +59,6 @@ public class PlayerInputReader : MonoBehaviour
         current.JumpPressed = jump.WasPressedThisFrame();
         current.GrabPressed = grab.WasPressedThisFrame();
         current.Lift = (raise.IsPressed() ? 1f : 0f) - (lower.IsPressed() ? 1f : 0f);
+        current.CameraYaw = cameraTransform ? cameraTransform.eulerAngles.y : 0f;
     }
 }

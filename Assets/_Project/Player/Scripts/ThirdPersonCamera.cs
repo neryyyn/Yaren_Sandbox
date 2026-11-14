@@ -10,6 +10,11 @@ public class ThirdPersonCamera : MonoBehaviour
     [SerializeField] private float minPitch = -30f;
     [SerializeField] private float maxPitch = 70f;
 
+    [Header("Çarpýþma")]
+    [SerializeField] private LayerMask collisionMask = ~0;  // kameranýn çarpacaðý katmanlar
+    [SerializeField] private float collisionRadius = 0.25f; // kameranýn "kalýnlýðý"
+    [SerializeField] private float minDistance = 0.8f;      // oyuncuya en fazla bu kadar yaklaþsýn
+
     private PlayerInputReader input;
     private float yaw;
     private float pitch = 15f;
@@ -19,6 +24,7 @@ public class ThirdPersonCamera : MonoBehaviour
     {
         target = newTarget;
         input = target ? target.GetComponent<PlayerInputReader>() : null;
+        if (input != null) input.SetCamera(transform);
         if (target) yaw = target.eulerAngles.y;
     }
 
@@ -50,7 +56,17 @@ public class ThirdPersonCamera : MonoBehaviour
 
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
         Vector3 focus = target.position + Vector3.up * height;
-        transform.position = focus - rotation * Vector3.forward * distance;
+        Vector3 backward = rotation * Vector3.back;
+
+        // Oyuncu ile kamera arasýnda engel varsa kamerayý engelin önüne çek
+        float currentDistance = distance;
+        if (Physics.SphereCast(focus, collisionRadius, backward, out RaycastHit hit,
+                               distance, collisionMask, QueryTriggerInteraction.Ignore))
+        {
+            currentDistance = Mathf.Max(hit.distance, minDistance);
+        }
+
+        transform.position = focus + backward * currentDistance;
         transform.rotation = rotation;
     }
 

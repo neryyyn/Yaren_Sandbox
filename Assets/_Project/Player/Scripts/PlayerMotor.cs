@@ -8,30 +8,30 @@ public class PlayerMotor : MonoBehaviour
 
     [Header("Dönüþ")]
     [SerializeField] private RotationMode rotationMode = RotationMode.FaceCamera;
+    [SerializeField] private float turnSpeed = 720f;        // derece/sn
+    [SerializeField] private bool turnWhileHolding = false; // tek kiþilik test için: tepsiyle yavaþça dön
+    [SerializeField] private float holdingTurnSpeed = 90f;  // derece/sn, tepsiyle dönüþ hýzý
+
     [Header("Hýzlar (birim/sn)")]
     [SerializeField] private float walkSpeed = 20f;
-    [SerializeField, Range(0.1f, 1f)] private float carrySpeedMultiplier = 0.5f; // tepsiyle hýz çarpaný
     [SerializeField] private float runSpeed = 30f;
     [SerializeField] private float slowSpeed = 8f;   // GDD'de yok, ekiple netleþecek
-    [SerializeField] private float turnSpeed = 720f; // derece/sn
+    [SerializeField, Range(0.1f, 1f)] private float carrySpeedMultiplier = 0.5f; // tepsiyle hýz çarpaný
 
     [Header("Zýplama")]
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -25f;
     [SerializeField] private float coyoteTime = 0.1f; // kenardan düþerken kýsa süre zýplama izni
 
-    [Header("Referans")]
-    [SerializeField] private Transform cameraTransform;
-
-    // Tepsiyi tutunca Hands script'i bunu true yapacak
+    // Tepsiyi tutunca Hands script'i bunu true yapar
     public bool IsHolding { get; set; }
 
     // Tepsi sistemi dönüþü kendisi yönetmek isterse true yapar
     public bool LockRotation { get; set; }
+
     public bool IsGrounded => controller.isGrounded;
     public float CurrentSpeed { get; private set; }
 
-    
     // Karakter zýpladý (Ýdil'in tepsi sistemi senkron zýplamayý kontrol etmek için dinler)
     public event System.Action Jumped;
 
@@ -44,19 +44,16 @@ public class PlayerMotor : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
         input = GetComponent<PlayerInputReader>();
-        if (cameraTransform == null && Camera.main != null)
-            cameraTransform = Camera.main.transform;
     }
 
     private void Update()
     {
         PlayerInputData data = input.Current;
 
-        // 1) Kameraya göre yön
-        Vector3 forward = cameraTransform ? cameraTransform.forward : Vector3.forward;
-        Vector3 right = cameraTransform ? cameraTransform.right : Vector3.right;
-        forward.y = 0f; right.y = 0f;
-        forward.Normalize(); right.Normalize();
+        // 1) Kameraya göre yön (kameranýn açýsý girdiyle geliyor, sahnedeki kameraya bakmýyoruz)
+        Quaternion cameraRotation = Quaternion.Euler(0f, data.CameraYaw, 0f);
+        Vector3 forward = cameraRotation * Vector3.forward;
+        Vector3 right = cameraRotation * Vector3.right;
 
         Vector3 direction = forward * data.Move.y + right * data.Move.x;
         if (direction.sqrMagnitude > 1f) direction.Normalize();
@@ -65,14 +62,23 @@ public class PlayerMotor : MonoBehaviour
         float speed = PickSpeed(data);
         CurrentSpeed = direction.magnitude * speed;
 
-        // 3) Dönüþ: tepsi tutarken dönme, elin boþken seçilen moda göre dön
+        // 3) Dönüþ
         bool isMoving = direction.sqrMagnitude > 0.001f;
-        if (!IsHolding && !LockRotation && isMoving)
+        if (!LockRotation && isMoving)
         {
-            Vector3 lookDirection = rotationMode == RotationMode.FaceCamera ? forward : direction;
-            Quaternion targetRot = Quaternion.LookRotation(lookDirection);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation, targetRot, turnSpeed * Time.deltaTime);
+            if (!IsHolding)
+            {
+                // Elin boþken: seçilen moda göre normal hýzda dön
+                Vector3 lookDirection = rotationMode == RotationMode.FaceCamera ? forward : direction;
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation, Quaternion.LookRotation(lookDirection), turnSpeed * Time.deltaTime);
+            }
+            else if (turnWhileHolding)
+            {
+                // Tepsiyle: kamera yönüne yavaþça dön (sadece test için)
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation, Quaternion.LookRotation(forward), holdingTurnSpeed * Time.deltaTime);
+            }
         }
 
         // 4) Yer çekimi ve zýplama
@@ -102,7 +108,7 @@ public class PlayerMotor : MonoBehaviour
         return speed;
     }
 
-    // Ýdil senkron zýplamada bunu çaðýrabilir
+    // Zýplamayý dener; yerdeyse (veya coyote süresindeyse) zýplatýr
     public bool TryJump()
     {
         if (Time.time - lastGroundedTime > coyoteTime) return false;
