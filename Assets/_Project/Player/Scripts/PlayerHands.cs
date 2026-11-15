@@ -14,6 +14,12 @@ public class PlayerHands : MonoBehaviour
     [SerializeField] private Transform rightHand;            // HandPoint'in içinde, saðda
     [SerializeField] private float handSpacing = 0.5f;       // iki el arasý mesafe
 
+
+    [Header("El yüksekliði (sol týk yükselt, sað týk alçalt)")]
+    [SerializeField] private float liftSpeed = 0.8f;         // metre/sn
+    [SerializeField] private float minHandOffset = -0.4f;    // en fazla ne kadar alçalýr
+    [SerializeField] private float maxHandOffset = 0.4f;     // en fazla ne kadar yükselir
+
     [Header("Kollar (sadece görsel)")]
     [SerializeField] private Transform leftShoulder;
     [SerializeField] private Transform rightShoulder;
@@ -34,15 +40,21 @@ public class PlayerHands : MonoBehaviour
     public event System.Action<IGrabbable> Released;
     public event System.Action JumpedWhileHolding;   // tepsi tutarken zýplandý (Ýdil dinleyecek)
 
+    public float HandHeightOffset => handOffset; // ellerin normal yüksekliðe göre farký (metre)
+
     private PlayerInputReader input;
     private PlayerMotor motor;
     private readonly Collider[] hits = new Collider[16];
+
+    private float handOffset;
+    private Vector3 handPointRestLocal;
 
     private void Awake()
     {
         input = GetComponent<PlayerInputReader>();
         motor = GetComponent<PlayerMotor>();
         motor.Jumped += () => { if (IsHolding) JumpedWhileHolding?.Invoke(); };
+        handPointRestLocal = handPoint.localPosition;
         PlaceHands();
     }
 
@@ -57,10 +69,24 @@ public class PlayerHands : MonoBehaviour
 
     private void Update()
     {
-        if (!input.Current.GrabPressed) return;
+        UpdateHandHeight();
 
-        if (IsHolding) Release();
-        else TryGrab();
+        if (input.Current.GrabPressed)
+        {
+            if (IsHolding) Release();
+            else TryGrab();
+        }
+    }
+
+    private void UpdateHandHeight()
+    {
+        if (IsHolding)
+            handOffset += input.Current.Lift * liftSpeed * Time.deltaTime;  // týkla yükselt/alçalt
+        else
+            handOffset = Mathf.MoveTowards(handOffset, 0f, liftSpeed * Time.deltaTime); // býrakýnca normale dön
+
+        handOffset = Mathf.Clamp(handOffset, minHandOffset, maxHandOffset);
+        handPoint.localPosition = handPointRestLocal + Vector3.up * handOffset;
     }
 
     private void LateUpdate()
