@@ -14,7 +14,6 @@ public class PlayerHands : MonoBehaviour
     [SerializeField] private Transform rightHand;            // HandPoint'in içinde, saðda
     [SerializeField] private float handSpacing = 0.5f;       // iki el arasý mesafe
 
-
     [Header("El yüksekliði (sol týk yükselt, sað týk alçalt)")]
     [SerializeField] private float liftSpeed = 0.8f;         // metre/sn
     [SerializeField] private float minHandOffset = -0.4f;    // en fazla ne kadar alçalýr
@@ -35,17 +34,20 @@ public class PlayerHands : MonoBehaviour
     public bool IsHolding => Held != null;
     public IGrabbable Held { get; private set; }
     public float LiftInput => IsHolding ? input.Current.Lift : 0f; // +1 yükselt, -1 alçalt
+    public float HandHeightOffset => handOffset;                   // ellerin normal yüksekliðe göre farký (metre)
+
+    // Tutulan eþya ellerin yükselip alçalmasýný kýsýtlamak isterse ayarlar
+    // (ör. alçaltýnca tepsi alttaki küpe girecekse). Ellerin bu karedeki yükseklik deðiþimini alýr,
+    // izin verilen deðiþimi döndürür.
+    public System.Func<float, float> HandHeightFilter { get; set; }
 
     public event System.Action<IGrabbable> Grabbed;
     public event System.Action<IGrabbable> Released;
     public event System.Action JumpedWhileHolding;   // tepsi tutarken zýplandý (Ýdil dinleyecek)
 
-    public float HandHeightOffset => handOffset; // ellerin normal yüksekliðe göre farký (metre)
-
     private PlayerInputReader input;
     private PlayerMotor motor;
     private readonly Collider[] hits = new Collider[16];
-
     private float handOffset;
     private Vector3 handPointRestLocal;
 
@@ -80,12 +82,31 @@ public class PlayerHands : MonoBehaviour
 
     private void UpdateHandHeight()
     {
+        float target;
         if (IsHolding)
-            handOffset += input.Current.Lift * liftSpeed * Time.deltaTime;  // týkla yükselt/alçalt
+            target = handOffset + input.Current.Lift * liftSpeed * Time.deltaTime;  // týkla yükselt/alçalt
         else
-            handOffset = Mathf.MoveTowards(handOffset, 0f, liftSpeed * Time.deltaTime); // býrakýnca normale dön
+            target = Mathf.MoveTowards(handOffset, 0f, liftSpeed * Time.deltaTime); // býrakýnca normale dön
 
-        handOffset = Mathf.Clamp(handOffset, minHandOffset, maxHandOffset);
+        target = Mathf.Clamp(target, minHandOffset, maxHandOffset);
+
+        // Tutulan eþyaya sor: bu kadar inip kalkabilir miyim?
+        float delta = target - handOffset;
+        if (IsHolding && HandHeightFilter != null) delta = HandHeightFilter(delta);
+
+        SetHandOffset(handOffset + delta);
+    }
+
+    // Tepsi yukarýdan bir þeyin içine girdiyse elleri kaldýrmak için (karakter yerine eller kalkar)
+    public void PushHandsUp(float amount)
+    {
+        if (amount <= 0f) return;
+        SetHandOffset(handOffset + amount);
+    }
+
+    private void SetHandOffset(float value)
+    {
+        handOffset = Mathf.Clamp(value, minHandOffset, maxHandOffset);
         handPoint.localPosition = handPointRestLocal + Vector3.up * handOffset;
     }
 

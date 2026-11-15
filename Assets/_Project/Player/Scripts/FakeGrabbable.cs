@@ -43,13 +43,14 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         float halfDepth = GetComponent<MeshFilter>().sharedMesh.bounds.extents.z * transform.localScale.z;
         transform.localPosition = new Vector3(0f, 0f, halfDepth + gap);
 
-        // Karakter hareket etmeden ve dönmeden önce tepsinin bir yere çarpýp çarpmayacaðýný sorsun
+        // Karakter hareket etmeden, dönmeden ve elleri inip kalkmadan önce tepsiye sorsun
         holderMotor = hands.GetComponent<PlayerMotor>();
         if (holderMotor)
         {
             holderMotor.MoveFilter = BlockIfTrayHits;
             holderMotor.RotationFilter = BlockIfTurnHits;
         }
+        hands.HandHeightFilter = BlockIfHandsHit;
     }
 
     public void OnRelease(PlayerHands hands)
@@ -60,6 +61,7 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
             holderMotor.RotationFilter = null;
         }
         holderMotor = null;
+        hands.HandHeightFilter = null;
 
         transform.SetParent(null, true);
         box.enabled = true;
@@ -88,7 +90,7 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         => Physics.CheckBox(BoxCenterAt(trayPosition, trayRotation), HalfExtents, trayRotation,
                             blockMask, QueryTriggerInteraction.Ignore);
 
-    // 1) Gitmeden önce bak: varýlacak yerde bir þey varsa gitme, X veya Z boyunca kaymayý dene
+    // 1) Yürümeden önce bak: varýlacak yerde bir þey varsa gitme, X veya Z boyunca kaymayý dene
     private Vector3 BlockIfTrayHits(Vector3 move)
     {
         if (move.sqrMagnitude < 0.00000001f) return move;
@@ -107,7 +109,7 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         return Vector3.zero;
     }
 
-    // Dönüþ için de aynýsý: dönünce tepsi bir þeye girecekse dönme
+    // 2) Dönmeden önce bak: dönünce tepsi bir þeye girecekse dönme
     private Quaternion BlockIfTurnHits(Quaternion nextRotation)
     {
         Transform player = holderMotor.transform;
@@ -121,7 +123,22 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         return IsBlocked(nextTrayPosition, nextTrayRotation) ? player.rotation : nextRotation;
     }
 
-    // 2) Girdiyse dýþarý it: her karenin sonunda tepsi bir þeyin içindeyse karakteri geri it
+    // 3) Elleri indirip kaldýrmadan önce bak: tepsi alttaki/üstteki bir þeye girecekse durdur
+    private float BlockIfHandsHit(float deltaY)
+    {
+        if (Mathf.Abs(deltaY) < 0.000001f) return deltaY;
+
+        Vector3 position = transform.position;
+        Quaternion rotation = transform.rotation;
+
+        // Tepsi zaten bir þeyin içindeyse serbest býrak ki oradan çýkabilsin
+        if (IsBlocked(position, rotation)) return deltaY;
+
+        return IsBlocked(position + Vector3.up * deltaY, rotation) ? 0f : deltaY;
+    }
+
+    // 4) Girdiyse dýþarý çýkar: her karenin sonunda tepsi bir þeyin içindeyse
+    //    yandan girdiyse karakteri geri it, yukarýdan girdiyse elleri kaldýr
     private void LateUpdate()
     {
         if (holderMotor == null) return;
@@ -145,8 +162,12 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         }
         box.enabled = false; // karakter kendi tepsisine takýlmasýn diye tekrar kapat
 
-        push.y = 0f; // sadece yatayda it (karakteri havaya kaldýrmasýn)
-        if (push.sqrMagnitude > 0.00000001f)
-            holderMotor.Nudge(push * 1.05f); // biraz fazlasýyla it ki tam dýþarý çýksýn
+        // Yukarý doðru itme varsa: karakteri deðil elleri kaldýr
+        if (push.y > 0f && holder) holder.PushHandsUp(push.y * 1.05f);
+
+        // Yandan itme varsa: karakteri geri it
+        Vector3 sidePush = new Vector3(push.x, 0f, push.z);
+        if (sidePush.sqrMagnitude > 0.00000001f)
+            holderMotor.Nudge(sidePush * 1.05f); // biraz fazlasýyla it ki tam dýþarý çýksýn
     }
 }
