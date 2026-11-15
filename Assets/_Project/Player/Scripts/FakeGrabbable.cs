@@ -14,6 +14,7 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
     private Vector3 startPosition;
     private Quaternion startRotation;
     private int blockMask;
+    private readonly Collider[] overlaps = new Collider[16];
 
     private void Awake()
     {
@@ -77,48 +78,75 @@ public class FakeGrabbable : MonoBehaviour, IGrabbable, IRespawnable
         transform.SetPositionAndRotation(startPosition, startRotation);
     }
 
-    // Tepsiyi hareket yönünde "kaydýrarak" dene; çarpacaksa duvar boyunca kaydýr
+    // --- Yardýmcýlar: tepsinin kutusu belli bir yerde/açýda bir þeye deðiyor mu? ---
+    private Vector3 HalfExtents => Vector3.Scale(box.size * 0.5f, transform.lossyScale);
+
+    private Vector3 BoxCenterAt(Vector3 trayPosition, Quaternion trayRotation)
+        => trayPosition + trayRotation * Vector3.Scale(box.center, transform.lossyScale);
+
+    private bool IsBlocked(Vector3 trayPosition, Quaternion trayRotation)
+        => Physics.CheckBox(BoxCenterAt(trayPosition, trayRotation), HalfExtents, trayRotation,
+                            blockMask, QueryTriggerInteraction.Ignore);
+
+    // 1) Gitmeden önce bak: varýlacak yerde bir þey varsa gitme, X veya Z boyunca kaymayý dene
     private Vector3 BlockIfTrayHits(Vector3 move)
     {
-        float distance = move.magnitude;
-        if (distance < 0.0001f) return move;
+        if (move.sqrMagnitude < 0.00000001f) return move;
 
-        Vector3 center = transform.TransformPoint(box.center);
-        Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, transform.lossyScale);
+        Vector3 position = transform.position;
+        Quaternion rotation = transform.rotation;
 
-        if (Physics.BoxCast(center, halfExtents, move / distance, out RaycastHit hit,
-                            transform.rotation, distance + 0.02f, blockMask, QueryTriggerInteraction.Ignore))
-        {
-            Vector3 slideAlong = Vector3.ProjectOnPlane(move, hit.normal);
-            slideAlong.y = 0f;
-            return slideAlong;
-        }
-        return move;
+        if (!IsBlocked(position + move, rotation)) return move;
+
+        Vector3 onlyX = new Vector3(move.x, 0f, 0f);
+        if (onlyX.sqrMagnitude > 0.00000001f && !IsBlocked(position + onlyX, rotation)) return onlyX;
+
+        Vector3 onlyZ = new Vector3(0f, 0f, move.z);
+        if (onlyZ.sqrMagnitude > 0.00000001f && !IsBlocked(position + onlyZ, rotation)) return onlyZ;
+
+        return Vector3.zero;
     }
 
-    // Karakter bu açýya dönerse tepsi bir þeyin içine girecek mi? Girecekse dönme.
+    // Dönüþ için de aynýsý: dönünce tepsi bir þeye girecekse dönme
     private Quaternion BlockIfTurnHits(Quaternion nextRotation)
     {
         Transform player = holderMotor.transform;
-        Quaternion currentRotation = player.rotation;
-
-        // Tepsinin karaktere göre yerini ve açýsýný bul
-        Quaternion inverse = Quaternion.Inverse(currentRotation);
+        Quaternion inverse = Quaternion.Inverse(player.rotation);
         Vector3 localPosition = inverse * (transform.position - player.position);
         Quaternion localRotation = inverse * transform.rotation;
 
-        Vector3 halfExtents = Vector3.Scale(box.size * 0.5f, transform.lossyScale);
-        Vector3 boxOffset = Vector3.Scale(box.center, transform.lossyScale);
-
-        // Dönüþ sonrasý tepsi nerede olacak?
         Quaternion nextTrayRotation = nextRotation * localRotation;
-        Vector3 nextCenter = player.position + nextRotation * localPosition + nextTrayRotation * boxOffset;
-        bool hitsAfterTurn = Physics.CheckBox(nextCenter, halfExtents, nextTrayRotation, blockMask, QueryTriggerInteraction.Ignore);
+        Vector3 nextTrayPosition = player.position + nextRotation * localPosition;
 
-        // Tepsi þu an zaten bir þeyin içindeyse dönmeye izin ver ki oradan çýkabilsin
-        Vector3 currentCenter = transform.TransformPoint(box.center);
-        bool hitsNow = Physics.CheckBox(currentCenter, halfExtents, transform.rotation, blockMask, QueryTriggerInteraction.Ignore);
+        return IsBlocked(nextTrayPosition, nextTrayRotation) ? player.rotation : nextRotation;
+    }
 
-        return (hitsAfterTurn && !hitsNow) ? currentRotation : nextRotation;
+    // 2) Girdiyse dýþarý it: her karenin sonunda tepsi bir þeyin içindeyse karakteri geri it
+    private void LateUpdate()
+    {
+        if (holderMotor == null) return;
+
+        Vector3 center = BoxCenterAt(transform.position, transform.rotation);
+        int count = Physics.OverlapBoxNonAlloc(center, HalfExtents, overlaps, transform.rotation,
+                                               blockMask, QueryTriggerInteraction.Ignore);
+        if (count == 0) return;
+
+        box.enabled = true; // hesap için kýsa süreliðine aç
+        Vector3 push = Vector3.zero;
+        for (int i = 0; i < count; i++)
+        {
+            Collider other = overlaps[i];
+            if (Physics.ComputePenetration(box, transform.position, transform.rotation,
+                                           other, other.transform.position, other.transform.rotation,
+                                           out Vector3 direction, out float distance))
+            {
+                push += direction * distance;
+            }
+        }
+        box.enabled = false; // karakter kendi tepsisine takýlmasýn diye tekrar kapat
+
+        push.y = 0f; // sadece yatayda it (karakteri havaya kaldýrmasýn)
+        if (push.sqrMagnitude > 0.00000001f)
+            holderMotor.Nudge(push * 1.05f); // biraz fazlasýyla it ki tam dýþarý çýksýn
     }
 }

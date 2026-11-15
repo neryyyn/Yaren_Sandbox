@@ -176,4 +176,6 @@ public class PlayerMotor : MonoBehaviour
         controller.enabled = true;
         verticalVelocity = 0f;
     }
+    // Karakteri duvarlara saygý göstererek biraz iter (ör. tepsi bir þeyin içine girdiyse dýþarý çýkarmak için)
+    public void Nudge(Vector3 delta) => controller.Move(delta);
 }
